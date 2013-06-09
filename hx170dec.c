@@ -53,6 +53,9 @@
 #include <asm/uaccess.h>
 #include <linux/ioport.h>
 #include <linux/clk.h>
+#include <uapi/asm-generic/signal.h>
+#include <asm-generic/siginfo.h>
+#include <uapi/asm-generic/siginfo.h>
 
 #include <asm/irq.h>
 #include <linux/irq.h>
@@ -74,7 +77,7 @@ MODULE_DESCRIPTION("driver module for 8170/81990 Hantro decoder/pp");
 /* Logic module base address */
 #define HXDEC_LOGIC_MODULE0_BASE	AT91SAM9G45_VDEC_BASE
 
-#define VP_PB_INT_LT                    AT91SAM9G45_ID_VDEC
+#define VP_PB_INT_LT                    (NR_IRQS_LEGACY + AT91SAM9G45_ID_VDEC)
 
 #define INT_EXPINT1                     10
 #define INT_EXPINT2                     11
@@ -145,7 +148,7 @@ static irqreturn_t hx170dec_isr(int irq, void *dev_id);
     Return type     : int
 ------------------------------------------------------------------------------*/
 
-static int hx170dec_ioctl(struct inode *inode, struct file *filp,
+static long hx170dec_ioctl(struct file *filp,
                           unsigned int cmd, unsigned long arg)
 {
     int err = 0;
@@ -282,7 +285,7 @@ static int hx170dec_release(struct inode *inode, struct file *filp)
 static struct file_operations hx170dec_fops = {
   open:hx170dec_open,
   release:hx170dec_release,
-  ioctl:hx170dec_ioctl,
+  unlocked_ioctl:hx170dec_ioctl,
   fasync:hx170dec_fasync,
 };
 
@@ -335,7 +338,7 @@ int __init hx170dec_init(void)
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18))
                              SA_INTERRUPT | SA_SHIRQ,
 #else
-                             IRQF_DISABLED | IRQF_SHARED,
+                             IRQF_DISABLED | IRQF_SHARED | IRQF_TRIGGER_HIGH,
 #endif
                              "hx170dec", (void *) &hx170dec_data);
         if(result != 0)
@@ -440,8 +443,6 @@ static int CheckHwId(hx170dec_t * dev)
 ------------------------------------------------------------------------------*/
 static int ReserveIO(void)
 {
-    set_irq_type(AT91SAM9G45_ID_VDEC, IRQ_TYPE_LEVEL_HIGH);
-
     clk_enable(clk_get(NULL, "vdec_clk"));
 
     if(!request_mem_region

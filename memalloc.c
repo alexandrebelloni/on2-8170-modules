@@ -94,7 +94,7 @@ struct allocation
 
 struct list_head heap_list;
 
-static spinlock_t mem_lock = SPIN_LOCK_UNLOCKED;
+static DEFINE_SPINLOCK(mem_lock);
 
 typedef struct hlinc
 {
@@ -182,7 +182,7 @@ static int AllocMemory(unsigned *busaddr, unsigned int size, struct file *filp);
 static int FreeMemory(unsigned long busaddr);
 static void ResetMems(void);
 
-static int memalloc_ioctl(struct inode *inode, struct file *filp,
+static long memalloc_ioctl(struct file *filp,
                           unsigned int cmd, unsigned long arg)
 {
     int err = 0;
@@ -190,7 +190,7 @@ static int memalloc_ioctl(struct inode *inode, struct file *filp,
 
     PDEBUG("ioctl cmd 0x%08x\n", cmd);
 
-    if(inode == NULL || filp == NULL || arg == 0)
+    if(filp == NULL || arg == 0)
     {
         return -EFAULT;
     }
@@ -221,17 +221,17 @@ static int memalloc_ioctl(struct inode *inode, struct file *filp,
 
     case MEMALLOC_IOCXGETBUFFER:
         {
-            int result;
+            int result, ignored;
             MemallocParams memparams;
 
             PDEBUG("GETBUFFER\n");
             spin_lock(&mem_lock);
 
-            __copy_from_user(&memparams, (const void *) arg, sizeof(memparams));
+            ignored = copy_from_user(&memparams, (const void *) arg, sizeof(memparams));
 
             result = AllocMemory(&memparams.busAddress, memparams.size, filp);
 
-            __copy_to_user((void *) arg, &memparams, sizeof(memparams));
+            ignored = copy_to_user((void *) arg, &memparams, sizeof(memparams));
 
             spin_unlock(&mem_lock);
 
@@ -297,7 +297,7 @@ static int memalloc_release(struct inode *inode, struct file *filp)
 static struct file_operations memalloc_fops = {
   open:memalloc_open,
   release:memalloc_release,
-  ioctl:memalloc_ioctl,
+  unlocked_ioctl:memalloc_ioctl,
 };
 
 int __init memalloc_init(void)
